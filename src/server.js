@@ -203,6 +203,7 @@ function requireSetupAuth(req, res, next) {
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "1mb" }));
+app.use(express.raw({ type: "application/octet-stream", limit: "5mb" }));
 
 // Minimal health endpoint for Railway.
 app.get("/setup/healthz", (_req, res) => res.json({ ok: true }));
@@ -258,6 +259,15 @@ app.get("/setup", requireSetupAuth, (_req, res) => {
 
     <label>Key / Token (if required)</label>
     <input id="authSecret" type="password" placeholder="Paste API key / token if applicable" />
+
+    <div id="authProfilesUpload" style="display:none; margin-top: 1rem;">
+      <label>Upload auth-profiles.json</label>
+      <input id="authProfilesFile" type="file" accept=".json" style="padding: 0.4rem;" />
+      <div class="muted" style="margin-top: 0.25rem">
+        Upload your auth-profiles.json configuration file. It will be saved to <code>${CLAWDBOT_STATE_DIR}/agents/main/agent/auth-profiles.json</code>
+      </div>
+      <div id="uploadStatus" style="margin-top: 0.5rem; color: #059669;"></div>
+    </div>
 
     <label>Wizard flow</label>
     <select id="flow">
@@ -732,6 +742,41 @@ app.post("/setup/api/reset", requireSetupAuth, async (_req, res) => {
       .send("OK - deleted config file. You can rerun setup now.");
   } catch (err) {
     res.status(500).type("text/plain").send(String(err));
+  }
+});
+
+app.post("/setup/api/upload-auth-profiles", requireSetupAuth, async (req, res) => {
+  try {
+    const agentDir = path.join(STATE_DIR, "agents", "main", "agent");
+    fs.mkdirSync(agentDir, { recursive: true });
+    
+    const authProfilesPath = path.join(agentDir, "auth-profiles.json");
+    
+    // Validate JSON
+    let jsonData;
+    try {
+      jsonData = JSON.parse(req.body.toString("utf8"));
+    } catch (err) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: "Invalid JSON format: " + String(err) 
+      });
+    }
+    
+    // Write the file
+    fs.writeFileSync(authProfilesPath, JSON.stringify(jsonData, null, 2), "utf8");
+    
+    return res.json({ 
+      ok: true, 
+      message: "auth-profiles.json uploaded successfully",
+      path: authProfilesPath
+    });
+  } catch (err) {
+    console.error("[/setup/api/upload-auth-profiles] error:", err);
+    return res.status(500).json({ 
+      ok: false, 
+      error: "Failed to upload file: " + String(err) 
+    });
   }
 });
 

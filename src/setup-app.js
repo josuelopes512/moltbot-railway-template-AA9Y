@@ -6,9 +6,54 @@
   var authGroupEl = document.getElementById('authGroup');
   var authChoiceEl = document.getElementById('authChoice');
   var logEl = document.getElementById('log');
+  var authProfilesUploadEl = document.getElementById('authProfilesUpload');
+  var authProfilesFileEl = document.getElementById('authProfilesFile');
+  var uploadStatusEl = document.getElementById('uploadStatus');
 
   function setStatus(s) {
     statusEl.textContent = s;
+  }
+
+  function toggleAuthProfilesUpload() {
+    var showUpload = authGroupEl.value === 'openai' && authChoiceEl.value === 'openai-codex';
+    if (authProfilesUploadEl) {
+      authProfilesUploadEl.style.display = showUpload ? 'block' : 'none';
+    }
+  }
+
+  function uploadAuthProfiles() {
+    if (!authProfilesFileEl.files || !authProfilesFileEl.files[0]) {
+      return Promise.resolve();
+    }
+
+    var file = authProfilesFileEl.files[0];
+    uploadStatusEl.textContent = 'Uploading ' + file.name + '...';
+    uploadStatusEl.style.color = '#0284c7';
+
+    return file.text().then(function(content) {
+      return fetch('/setup/api/upload-auth-profiles', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: content
+      });
+    }).then(function(res) {
+      return res.json();
+    }).then(function(result) {
+      if (result.ok) {
+        uploadStatusEl.textContent = '✓ ' + result.message;
+        uploadStatusEl.style.color = '#059669';
+        logEl.textContent += '\n[auth-profiles] Uploaded to: ' + result.path + '\n';
+      } else {
+        uploadStatusEl.textContent = '✗ ' + result.error;
+        uploadStatusEl.style.color = '#dc2626';
+        logEl.textContent += '\n[auth-profiles] Error: ' + result.error + '\n';
+      }
+    }).catch(function(e) {
+      uploadStatusEl.textContent = '✗ Upload failed: ' + String(e);
+      uploadStatusEl.style.color = '#dc2626';
+      logEl.textContent += '\n[auth-profiles] Upload error: ' + String(e) + '\n';
+    });
   }
 
   function renderAuth(groups) {
@@ -35,6 +80,11 @@
         opt2.textContent = o.label + (o.hint ? ' - ' + o.hint : '');
         authChoiceEl.appendChild(opt2);
       }
+      toggleAuthProfilesUpload();
+    };
+
+    authChoiceEl.onchange = function() {
+      toggleAuthProfilesUpload();
     };
 
     authGroupEl.onchange();
@@ -81,12 +131,16 @@
     };
 
     logEl.textContent = 'Running...\n';
+    uploadStatusEl.textContent = '';
 
-    fetch('/setup/api/run', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload)
+    // Upload auth-profiles.json first if selected
+    uploadAuthProfiles().then(function() {
+      return fetch('/setup/api/run', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
     }).then(function (res) {
       return res.text();
     }).then(function (text) {
