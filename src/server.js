@@ -203,7 +203,6 @@ function requireSetupAuth(req, res, next) {
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "1mb" }));
-app.use(express.raw({ type: "application/octet-stream", limit: "5mb" }));
 
 // Minimal health endpoint for Railway.
 app.get("/setup/healthz", (_req, res) => res.json({ ok: true }));
@@ -264,7 +263,7 @@ app.get("/setup", requireSetupAuth, (_req, res) => {
       <label>Upload auth-profiles.json</label>
       <input id="authProfilesFile" type="file" accept=".json" style="padding: 0.4rem;" />
       <div class="muted" style="margin-top: 0.25rem">
-        Upload your auth-profiles.json configuration file. It will be saved to <code>${CLAWDBOT_STATE_DIR}/agents/main/agent/auth-profiles.json</code>
+        Upload your auth-profiles.json configuration file. It will be saved to <code>\${CLAWDBOT_STATE_DIR}/agents/main/agent/auth-profiles.json</code>
       </div>
       <div id="uploadStatus" style="margin-top: 0.5rem; color: #059669;"></div>
     </div>
@@ -752,14 +751,13 @@ app.post("/setup/api/upload-auth-profiles", requireSetupAuth, async (req, res) =
     
     const authProfilesPath = path.join(agentDir, "auth-profiles.json");
     
-    // Validate JSON
-    let jsonData;
-    try {
-      jsonData = JSON.parse(req.body.toString("utf8"));
-    } catch (err) {
+    // req.body is already parsed by express.json()
+    const jsonData = req.body;
+    
+    if (!jsonData || typeof jsonData !== 'object') {
       return res.status(400).json({ 
         ok: false, 
-        error: "Invalid JSON format: " + String(err) 
+        error: "Invalid JSON format: expected an object" 
       });
     }
     
