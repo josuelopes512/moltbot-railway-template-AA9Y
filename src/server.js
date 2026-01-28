@@ -20,6 +20,9 @@ const WORKSPACE_DIR =
 // Protect /setup with a user-provided password.
 const SETUP_PASSWORD = process.env.SETUP_PASSWORD?.trim();
 
+// Enable headless/provisioned mode: skip onboarding and auto-start gateway if already configured.
+const SKIP_ONBOARD = process.env.SKIP_ONBOARD?.trim() === "1";
+
 // Gateway admin token (protects Clawdbot gateway + Control UI).
 // Must be stable across restarts. If not provided via env, persist it in the state dir.
 function resolveGatewayToken() {
@@ -77,6 +80,25 @@ function isConfigured() {
   } catch {
     return false;
   }
+}
+
+function isProvisioned() {
+  // Check if config file exists
+  const configExists = isConfigured();
+  
+  // Check if state directory has content (additional validation)
+  let hasState = false;
+  try {
+    const stateFiles = fs.readdirSync(STATE_DIR);
+    hasState = stateFiles.length > 0;
+  } catch {
+    hasState = false;
+  }
+  
+  const provisioned = configExists && hasState;
+  console.log(`[wrapper] isProvisioned: ${provisioned} (config=${configExists}, state=${hasState}, path=${configPath()})`);
+  
+  return provisioned;
 }
 
 let gatewayProc = null;
@@ -216,6 +238,54 @@ app.get("/setup/app.js", requireSetupAuth, (_req, res) => {
 });
 
 app.get("/setup", requireSetupAuth, (_req, res) => {
+  // NEW: Block /setup in headless mode
+  if (SKIP_ONBOARD) {
+    if (isProvisioned()) {
+      // Instance is provisioned, setup not needed
+      return res.status(404).type("html").send(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Setup Disabled</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui; margin: 2rem; max-width: 600px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 1.25rem; background: #f9f9f9; }
+    code { background: #e5e5e5; padding: 0.2rem 0.4rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Setup Disabled</h1>
+    <p>This instance is already provisioned and running in headless mode.</p>
+    <p>The setup wizard is disabled because <code>SKIP_ONBOARD=1</code> is set.</p>
+    <p><a href="/clawdbot">Go to Clawdbot UI</a></p>
+  </div>
+</body>
+</html>`);
+    } else {
+      // Instance not provisioned, but SKIP_ONBOARD prevents setup
+      return res.status(403).type("html").send(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Setup Blocked</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui; margin: 2rem; max-width: 600px; }
+    .card { border: 1px solid #d44; border-radius: 12px; padding: 1.25rem; background: #fee; }
+    code { background: #fdd; padding: 0.2rem 0.4rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Setup Blocked</h1>
+    <p><code>SKIP_ONBOARD=1</code> is active, therefore the wizard cannot run onboard.</p>
+    <p>To use the setup wizard, disable <code>SKIP_ONBOARD</code> (unset it or set it to any value other than "1") and restart the container.</p>
+  </div>
+</body>
+</html>`);
+    }
+  }
+  
   // No inline <script>: serve JS from /setup/app.js to avoid any encoding/template-literal issues.
   res.type("html").send(`<!doctype html>
 <html>
@@ -517,6 +587,14 @@ function runCmd(cmd, args, opts = {}) {
 
 app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
   try {
+    // NEW: Block onboarding in headless mode
+    if (SKIP_ONBOARD) {
+      return res.status(403).json({
+        ok: false,
+        output: "Onboarding is disabled because SKIP_ONBOARD=1 is set.\nDisable SKIP_ONBOARD to use the setup wizard.\n"
+      });
+    }
+    
     if (isConfigured()) {
       await ensureGatewayRunning();
       return res.json({
@@ -865,7 +943,7 @@ app.use(async (req, res) => {
   });
 });
 
-const server = app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", async () => {
   console.log(`[wrapper] listening on :${PORT}`);
   console.log(`[wrapper] state dir: ${STATE_DIR}`);
   console.log(`[wrapper] workspace dir: ${WORKSPACE_DIR}`);
@@ -873,12 +951,27 @@ const server = app.listen(PORT, "0.0.0.0", () => {
     `[wrapper] gateway token: ${CLAWDBOT_GATEWAY_TOKEN ? "(set)" : "(missing)"}`,
   );
   console.log(`[wrapper] gateway target: ${GATEWAY_TARGET}`);
+  console.log(`[wrapper] SKIP_ONBOARD: ${SKIP_ONBOARD ? "enabled" : "disabled"}`);
   if (!SETUP_PASSWORD) {
     console.warn(
       "[wrapper] WARNING: SETUP_PASSWORD is not set; /setup will error.",
     );
   }
-  // Don't start gateway unless configured; proxy will ensure it starts.
+  
+  // NEW: Headless mode auto-start
+  if (SKIP_ONBOARD && isProvisioned()) {
+    console.log("[wrapper] Provisioned mode: starting gateway (skipping /setup and onboard)");
+    try {
+      await ensureGatewayRunning();
+      console.log("[wrapper] Gateway started successfully in headless mode");
+    } catch (err) {
+      console.error("[wrapper] Failed to start gateway in headless mode:", err);
+    }
+  } else if (SKIP_ONBOARD && !isProvisioned()) {
+    console.log("[wrapper] Headless mode active but instance not provisioned; /setup will show error");
+  } else {
+    console.log("[wrapper] Standard mode: /setup wizard available");
+  }
 });
 
 server.on("upgrade", async (req, socket, head) => {
