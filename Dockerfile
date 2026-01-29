@@ -105,6 +105,12 @@ RUN printf '%s\n' \
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
+# Create and declare persistent volumes for clawdbot state
+RUN mkdir -p /home/node/.clawdbot /home/node/clawd \
+  && chown -R node:node /home/node/.clawdbot /home/node/clawd
+
+VOLUME ["/home/node/.clawdbot", "/home/node/clawd"]
+
 ENV PORT=8080
 EXPOSE 8080 18789
 
