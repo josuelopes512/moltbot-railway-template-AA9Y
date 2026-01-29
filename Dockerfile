@@ -70,6 +70,43 @@ RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /clawdbot/dist/entry.js "$@"'
 
 COPY src ./src
 
+# PM2 ecosystem (moltbolt gateway)
+RUN printf '%s\n' \
+'module.exports = {' \
+'  apps: [' \
+'    {' \
+'      name: "moltbolt-gateway",' \
+'      script: "clawdbot",' \
+'      args:  ["gateway", "run", "--port", "18789", "--bind", "lan"],' \
+'      exec_interpreter: true,' \
+'      autorestart: true,' \
+'      restart_delay: 5000,' \
+'      time: true,' \
+'    }' \
+'  ]' \
+'};' \
+> /app/ecosystem.config.cjs
+
+# Entrypoint: mantém CMD como node, mas inicia via PM2 automaticamente.
+# (Intercepta o CMD padrão e executa o processo PM2 "moltbolt-gateway")
+RUN printf '%s\n' \
+'#!/usr/bin/env bash' \
+'set -e' \
+'' \
+'# If started with the default CMD, run under PM2 automatically.' \
+'if [ "$1" = "node" ] && [ "$2" = "src/server.js" ]; then' \
+'  exec pm2-runtime /app/ecosystem.config.cjs --only moltbolt-gateway' \
+'fi' \
+'' \
+'# Otherwise, run the provided command.' \
+'exec "$@"' \
+> /usr/local/bin/docker-entrypoint.sh \
+  && chmod +x /usr/local/bin/docker-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
 ENV PORT=8080
-EXPOSE 8080
+EXPOSE 8080 18789
+
+# Mantido como você pediu
 CMD ["node", "src/server.js"]
