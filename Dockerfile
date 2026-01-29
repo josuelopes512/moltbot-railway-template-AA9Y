@@ -50,13 +50,16 @@ ENV NODE_ENV=production
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates \
+    nano \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Wrapper deps
 COPY package.json ./
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm install --omit=dev \
+  && npm install -g pm2 \
+  && npm cache clean --force
 
 # Copy built clawdbot
 COPY --from=clawdbot-build /clawdbot /clawdbot
