@@ -78,7 +78,7 @@ RUN printf '%s\n' \
 '      name: "moltbolt-gateway",' \
 '      script: "clawdbot",' \
 '      args:  ["gateway", "run", "--port", "18789", "--bind", "lan"],' \
-'      exec_interpreter: true,' \
+'      interpreter: "bash",' \
 '      autorestart: true,' \
 '      restart_delay: 5000,' \
 '      time: true,' \
