@@ -51,6 +51,8 @@ RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates \
     nano \
+    chromium \
+    jq \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -59,6 +61,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev \
   && npm install -g pm2 \
+  && npm install -g @google/gemini-cli \
   && npm cache clean --force
 
 # Copy built clawdbot
