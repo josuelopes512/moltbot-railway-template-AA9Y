@@ -55,6 +55,8 @@ RUN apt-get update \
     jq \
   && rm -rf /var/lib/apt/lists/*
 
+curl -fsSL https://tailscale.com/install.sh | bash
+
 WORKDIR /app
 
 # Wrapper deps
