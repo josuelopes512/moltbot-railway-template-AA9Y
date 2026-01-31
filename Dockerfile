@@ -4,14 +4,14 @@ SHELL ["/bin/bash", "-lc"]
 
 # Dependencies needed for clawdbot build
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     curl \
     python3 \
     make \
     g++ \
- && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
 # Install Bun (clawdbot build uses it)
 RUN curl -fsSL https://bun.sh/install | bash
@@ -52,13 +52,13 @@ SHELL ["/bin/bash", "-lc"]
 ENV NODE_ENV=production
 
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates \
     nano \
     chromium \
     jq \
     curl \
- && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
 # Install Tailscale (note: /dev/net/tun + NET_ADMIN must be granted at *runtime*, not build time)
 RUN curl -fsSL https://tailscale.com/install.sh | bash
@@ -68,9 +68,9 @@ WORKDIR /app
 # Wrapper deps
 COPY package.json ./
 RUN npm install --omit=dev \
- && npm install -g pm2 \
- && npm install -g @google/gemini-cli \
- && npm cache clean --force
+  && npm install -g pm2 \
+  && npm install -g @google/gemini-cli \
+  && npm cache clean --force
 
 # Copy built clawdbot
 COPY --from=clawdbot-build /clawdbot /clawdbot
@@ -114,30 +114,40 @@ if [ -n "${TAILSCALE_AUTHKEY:-}" ]; then
   echo "Starting Tailscale daemon..."
   tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
   sleep 2
-  
+
   echo "Authenticating Tailscale..."
   tailscale --socket=/var/run/tailscale/tailscaled.sock up \
     --authkey="${TAILSCALE_AUTHKEY}" \
     --hostname="${TAILSCALE_HOSTNAME:-moltbot-container}" \
     --accept-dns=false \
     ${TAILSCALE_EXTRA_ARGS:-}
-  
+
   echo "Tailscale connected!"
   tailscale --socket=/var/run/tailscale/tailscaled.sock status
-  
-  # Configurar Exit Node (se especificado)
+
+  # CORREÇÃO: configurar Exit Node via `tailscale up` (não `tailscale set`)
+  # Motivo: `tailscale set --exit-node=...` pode deixar RouteAll=false em alguns cenários,
+  # fazendo com que o tráfego de internet NÃO seja roteado pelo exit node.
   if [ -n "${TAILSCALE_EXIT_NODE:-}" ]; then
-    echo "Configuring exit node: ${TAILSCALE_EXIT_NODE}..."
-    tailscale --socket=/var/run/tailscale/tailscaled.sock set \
+    echo "Configuring exit node (full-tunnel): ${TAILSCALE_EXIT_NODE}..."
+
+    # Re-aplica o up incluindo o exit node. Precisamos re-mencionar os flags não-default,
+    # senão o tailscale retorna erro.
+    tailscale --socket=/var/run/tailscale/tailscaled.sock up \
+      --authkey="${TAILSCALE_AUTHKEY}" \
+      --hostname="${TAILSCALE_HOSTNAME:-moltbot-container}" \
+      --accept-dns=false \
       --exit-node="${TAILSCALE_EXIT_NODE}" \
-      --exit-node-allow-lan-access=true
-    
+      --exit-node-allow-lan-access=true \
+      ${TAILSCALE_EXTRA_ARGS:-}
+
     echo "Exit node configured!"
     sleep 1
-    
-    # Verificar IP público
-    echo "Public IP:"
-    curl -s https://ifconfig.me || echo "Failed to get public IP"
+
+    # Verificar IP público (IPv4/IPv6) para facilitar diagnóstico
+    echo "Public IP (v4):"; curl -4 -s https://ifconfig.me/ip || echo "Failed to get public IPv4"
+    echo ""
+    echo "Public IP (v6):"; curl -6 -s https://ifconfig.me/ip || echo "Failed to get public IPv6"
     echo ""
   fi
 fi
@@ -150,6 +160,7 @@ fi
 # Otherwise, run the provided command.
 exec "$@"
 EOF
+
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
@@ -159,6 +170,7 @@ RUN mkdir -p /root/clawd /data/.clawdbot
 VOLUME ["/root/clawd", "/data/.clawdbot"]
 
 ENV PORT=8080
+
 EXPOSE 8080 18789
 
 # Mantido como você pediu
