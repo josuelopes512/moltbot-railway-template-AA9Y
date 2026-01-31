@@ -101,10 +101,46 @@ module.exports = {
 };
 EOF
 
-# Entrypoint: mantém CMD como node, mas inicia via PM2 automaticamente.
+# Entrypoint: inicia Tailscale (se configurado) e depois PM2/comando
 RUN cat > /usr/local/bin/docker-entrypoint.sh <<'EOF'
 #!/usr/bin/env bash
 set -e
+
+# Criar diretórios necessários para o Tailscale
+mkdir -p /var/run/tailscale /var/lib/tailscale
+
+# Iniciar tailscaled em background (se NET_ADMIN disponível)
+if [ -n "${TAILSCALE_AUTHKEY:-}" ]; then
+  echo "Starting Tailscale daemon..."
+  tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
+  sleep 2
+  
+  echo "Authenticating Tailscale..."
+  tailscale --socket=/var/run/tailscale/tailscaled.sock up \
+    --authkey="${TAILSCALE_AUTHKEY}" \
+    --hostname="${TAILSCALE_HOSTNAME:-moltbot-container}" \
+    --accept-dns=false \
+    ${TAILSCALE_EXTRA_ARGS:-}
+  
+  echo "Tailscale connected!"
+  tailscale --socket=/var/run/tailscale/tailscaled.sock status
+  
+  # Configurar Exit Node (se especificado)
+  if [ -n "${TAILSCALE_EXIT_NODE:-}" ]; then
+    echo "Configuring exit node: ${TAILSCALE_EXIT_NODE}..."
+    tailscale --socket=/var/run/tailscale/tailscaled.sock set \
+      --exit-node="${TAILSCALE_EXIT_NODE}" \
+      --exit-node-allow-lan-access=true
+    
+    echo "Exit node configured!"
+    sleep 1
+    
+    # Verificar IP público
+    echo "Public IP:"
+    curl -s https://ifconfig.me || echo "Failed to get public IP"
+    echo ""
+  fi
+fi
 
 # If started with the default CMD, run under PM2 automatically.
 if [ "${1:-}" = "node" ] && [ "${2:-}" = "src/server.js" ]; then

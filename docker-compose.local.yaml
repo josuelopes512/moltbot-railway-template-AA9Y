@@ -1,11 +1,19 @@
 services:
-  moltbot:
-    image: ghcr.io/josuelopes512/moltbot:1.0.0
-    container_name: moltbot-compose
+  moltbot-local:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CLAWDBOT_GIT_REF: main
+    container_name: moltbot-local
     restart: unless-stopped
 
+    # Podman precisa de privileged para NET_ADMIN + /dev/net/tun funcionar corretamente
+    privileged: true
+    
     cap_add:
       - NET_ADMIN
+      - NET_RAW
 
     devices:
       - /dev/net/tun:/dev/net/tun
@@ -15,6 +23,7 @@ services:
       - "18789:18789"
 
     volumes:
+      - ./dev-workspace:/data/workspace
       - clawd-data:/data/.clawdbot
       - clawd-root:/root/clawd
       
@@ -38,7 +47,7 @@ services:
       
       # TAILSCALE (opcional - descomente e configure para usar)
       TAILSCALE_AUTHKEY: ${TAILSCALE_AUTHKEY:-}
-      TAILSCALE_HOSTNAME: ${TAILSCALE_HOSTNAME:moltbot-server}
+      TAILSCALE_HOSTNAME: ${TAILSCALE_HOSTNAME:-moltbot-local}
       TAILSCALE_EXTRA_ARGS: ${TAILSCALE_EXTRA_ARGS:-}
       TAILSCALE_EXIT_NODE: ${TAILSCALE_EXIT_NODE:-}
 
