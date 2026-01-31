@@ -20,7 +20,7 @@ services:
       
     environment:
       # REQUIRED
-      SKIP_ONBOARD: "1"
+      SKIP_ONBOARD: ${SKIP_ONBOARD:1}
       SETUP_PASSWORD: ${SETUP_PASSWORD}
       CLAWDBOT_STATE_DIR: ${CLAWDBOT_STATE_DIR}
       CLAWDBOT_WORKSPACE_DIR: ${CLAWDBOT_WORKSPACE_DIR}
@@ -30,11 +30,11 @@ services:
       CLAWDBOT_GATEWAY_TOKEN: ${CLAWDBOT_GATEWAY_TOKEN}
 
       # OPTIONAL
-      PORT: "8080"
-      INTERNAL_GATEWAY_PORT: "18789"
-      INTERNAL_GATEWAY_HOST: "127.0.0.1"
-      CLAWDBOT_ENTRY: "/clawdbot/dist/entry.js"
-      CLAWDBOT_NODE: "node"
+      PORT: ${PORT:8080}
+      INTERNAL_GATEWAY_PORT: ${INTERNAL_GATEWAY_PORT:18789}
+      INTERNAL_GATEWAY_HOST: ${INTERNAL_GATEWAY_HOST:127.0.0.1}
+      CLAWDBOT_ENTRY: ${CLAWDBOT_NODE:/clawdbot/dist/entry.js} 
+      CLAWDBOT_NODE: ${CLAWDBOT_NODE:node}
       
       # TAILSCALE (opcional - descomente e configure para usar)
       TAILSCALE_AUTHKEY: ${TAILSCALE_AUTHKEY:-}
