@@ -1,6 +1,6 @@
 services:
   moltbot:
-    image: ghcr.io/josuelopes512/moltbot:1.0.0
+    image: ghcr.io/josuelopes512/moltbot:1.0.1
     container_name: moltbot-compose
     restart: unless-stopped
 
