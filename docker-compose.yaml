@@ -1,0 +1,47 @@
+services:
+  moltbot:
+    image: ghcr.io/josuelopes512/moltbot:1.0.0
+    container_name: moltbot-compose
+    restart: unless-stopped
+
+    cap_add:
+      - NET_ADMIN
+
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+    ports:
+      - "8080:8080"
+      - "18789:18789"
+
+    volumes:
+      - clawd-data:/data/.clawdbot
+      - clawd-root:/root/clawd
+      
+    environment:
+      # REQUIRED
+      SKIP_ONBOARD: "1"
+      SETUP_PASSWORD: ${SETUP_PASSWORD}
+      CLAWDBOT_STATE_DIR: ${CLAWDBOT_STATE_DIR}
+      CLAWDBOT_WORKSPACE_DIR: ${CLAWDBOT_WORKSPACE_DIR}
+      CLAWDBOT_CONFIG_PATH: ${CLAWDBOT_CONFIG_PATH}
+      
+      # RECOMMENDED
+      CLAWDBOT_GATEWAY_TOKEN: ${CLAWDBOT_GATEWAY_TOKEN}
+
+      # OPTIONAL
+      PORT: "8080"
+      INTERNAL_GATEWAY_PORT: "18789"
+      INTERNAL_GATEWAY_HOST: "127.0.0.1"
+      CLAWDBOT_ENTRY: "/clawdbot/dist/entry.js"
+      CLAWDBOT_NODE: "node"
+
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv6.conf.all.forwarding: "1"
+
+volumes:
+  clawd-data:
+    external: true
+  clawd-root:
+    external: true
